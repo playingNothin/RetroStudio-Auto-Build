@@ -47,9 +47,48 @@ local function Hash(arg)
     return HashLib_m.md5(`\224\182\158{arg}\224\182\158`)
 end
 
-print("trying to load the stuff")
-local AutoBuildGui, MainFrame, TitleLabel, ModelBox, NameBox, StartButton, FartSound = loadstring(game:HttpGet("https://raw.githubusercontent.com/playingNothin/RetroStudio-Auto-Build/refs/heads/main/UI.lua"))()()
-local Properties = loadstring(game:HttpGet("https://raw.githubusercontent.com/playingNothin/RetroStudio-Auto-Build/refs/heads/main/Properties.lua"))()
+print("Fetching UI and Properties...")
+
+-- Safely grab the UI code
+local uiSuccess, uiCode = pcall(function()
+    return game:HttpGet("https://raw.githubusercontent.com/playingNothin/RetroStudio-Auto-Build/refs/heads/main/UI.lua")
+end)
+if not uiSuccess or uiCode:find("404: Not Found") then
+    return warn("Failed to fetch UI.lua. Is the GitHub repository set to Private?")
+end
+
+-- Safely compile the UI code
+local uiFunc, compileError = loadstring(uiCode)
+if not uiFunc then
+    return warn("Syntax error inside UI.lua: " .. tostring(compileError))
+end
+
+-- Safely execute the UI code
+-- Notice we handle both the ()() and () formats safely here
+local uiResult = uiFunc()
+local AutoBuildGui, MainFrame, TitleLabel, ModelBox, NameBox, StartButton, FartSound
+if type(uiResult) == "function" then
+    AutoBuildGui, MainFrame, TitleLabel, ModelBox, NameBox, StartButton, FartSound = uiResult()
+else
+    AutoBuildGui, MainFrame, TitleLabel, ModelBox, NameBox, StartButton, FartSound = uiResult, nil, nil, nil, nil, nil, nil -- Adjust this depending on what your UI.lua actually returns
+end
+
+
+-- Safely grab the Properties code
+local propSuccess, propCode = pcall(function()
+    return game:HttpGet("https://raw.githubusercontent.com/playingNothin/RetroStudio-Auto-Build/refs/heads/main/Properties.lua")
+end)
+if not propSuccess or propCode:find("404: Not Found") then
+    return warn("Failed to fetch Properties.lua. Is the GitHub repository set to Private?")
+end
+
+local propFunc, propCompileError = loadstring(propCode)
+if not propFunc then
+    return warn("Syntax error inside Properties.lua: " .. tostring(propCompileError))
+end
+
+local Properties = propFunc()
+print("Successfully loaded UI and Properties!")
 
 local CreatedInstances = 0
 
