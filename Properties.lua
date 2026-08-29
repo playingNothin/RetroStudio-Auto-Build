@@ -360,6 +360,13 @@ local Properties = {
 	["ScreenGui"] = {
 		"Enabled",
 	},
+	["SurfaceGui"] = {
+		"Active",
+		"Enabled",
+		"Face",
+		"CanvasSize",
+		"ZOffset",
+	},
 	["Frame"] = {
 		"Active",
 		"BackgroundColor3",
