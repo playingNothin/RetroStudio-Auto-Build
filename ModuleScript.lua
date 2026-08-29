@@ -209,10 +209,28 @@ UIS.InputBegan:Connect(function(Input)
     end
 end)
 
+-- ==========================================
+-- ANTI-AFK SYSTEM
+-- ==========================================
+-- First attempt: Completely disable the game's idle kick if the executor supports it
+local success, err = pcall(function()
+    for _, connection in pairs(getconnections(Player.Idled)) do
+        connection:Disable()
+    end
+end)
+
+-- Second attempt: Fallback to the improved VirtualUser clicking method
 Player.Idled:Connect(function()
-   vu:Button2Down(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
-   task.wait(1)
-   vu:Button2Up(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+    -- CaptureController helps this register even when tabbed out
+    vu:CaptureController()
+    vu:ClickButton2(Vector2.new())
+    
+    -- Classic backup movement
+    vu:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+    task.wait(0.5)
+    vu:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+    
+    print("Anti-AFK triggered to prevent disconnection.")
 end)
 
 return {}
