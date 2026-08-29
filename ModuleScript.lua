@@ -47,8 +47,8 @@ local function Hash(arg)
     return HashLib_m.md5(`\224\182\158{arg}\224\182\158`)
 end
 
-local AutoBuildGui, MainFrame, TitleLabel, ModelBox, NameBox, StartButton, FartSound = loadstring(game:HttpGet("https://raw.githubusercontent.com/FloofyPlasma/RetroStudio-Auto-Build/main/UI.lua"))()()
-local Properties = loadstring(game:HttpGet("https://raw.githubusercontent.com/FloofyPlasma/RetroStudio-Auto-Build/main/Properties.lua"))()
+local AutoBuildGui, MainFrame, TitleLabel, ModelBox, NameBox, StartButton, FartSound = loadstring(game:HttpGet("https://raw.githubusercontent.com/playingNothin/RetroStudio-Auto-Build/main/UI.lua"))()()
+local Properties = loadstring(game:HttpGet("https://raw.githubusercontent.com/playingNothin/RetroStudio-Auto-Build/main/Properties.lua"))()
 
 local CreatedInstances = 0
 
