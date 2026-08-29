@@ -90,9 +90,16 @@ end
 local Properties = propFunc()
 print("Successfully loaded UI and Properties!")
 
+-- ==========================================
+-- BUILDER CONFIGURATION
+-- ==========================================
+local DELAY_TIME = 0.05 -- Increase this if you get kicked for creating objects too quickly!
 local CreatedInstances = 0
 
 local function CreateNewInstance(ClassName, Parent)
+    -- YIELD TO PREVENT RATE LIMIT/KICK
+    task.wait(DELAY_TIME)
+
     -- 3. Calculate clock and hash, and pass them as the 3rd and 4th arguments
     local clock = os.clock()
     local securityHash = Hash(clock)
