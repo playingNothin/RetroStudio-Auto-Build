@@ -16,28 +16,36 @@ local FartSounds = {
     "rbxassetid://4376814302"
 }
 
-
 if game.PlaceId ~= 5846387555 then
-	local message = Instance.new('Message', workspace)
-	message.Text = "Hey, you're in the wrong place. This only works in studio mode."
-	return
+    local message = Instance.new('Message', workspace)
+    message.Text = "Hey, you're in the wrong place. This only works in studio mode."
+    return
 end
 
 do
-	local OldUI = CoreGui:FindFirstChild("AutoBuildGui")
-	if OldUI then
-		OldUI:Destroy()
-	end
+    local OldUI = CoreGui:FindFirstChild("AutoBuildGui")
+    if OldUI then
+        OldUI:Destroy()
+    end
 end
 
-warn('\n\n\n\n\nThanks for using RetroStudio Auto Build by discord.gg/FloofyPlasma! \n\n\nPress the insert key to toggle the ui.')
+warn('Script Loaded')
 
-local RemoteFunctions = ReplicatedStorage.RemoteFunctions
-local RemoteEvents = ReplicatedStorage.RemoteEvents
+-- 1. Updated Paths to RetroStudio's new _RetroStudio folder structure
+local RetroStudio = ReplicatedStorage:WaitForChild("_RetroStudio")
+local Remotes = RetroStudio:WaitForChild("Remotes")
 
-local CreateObjectEvent = RemoteFunctions.CreateObject
-local ObjectPropertyChangeRequestEvent = RemoteEvents.ObjectPropertyChangeRequested
-local CheckpointEvent = RemoteEvents.ChangeHistoryInteractionRequested
+local CreateObjectEvent = Remotes:WaitForChild("CreateObject")
+local ObjectPropertyChangeRequestEvent = Remotes:WaitForChild("ObjectPropertyChangeRequested")
+-- Fallback in case ChangeHistoryInteractionRequested hasn't been moved yet
+local CheckpointEvent = Remotes:FindFirstChild("ChangeHistoryInteractionRequested") or ReplicatedStorage:FindFirstChild("RemoteEvents") and ReplicatedStorage.RemoteEvents:FindFirstChild("ChangeHistoryInteractionRequested")
+
+-- 2. Require HashLib to bypass the InvokeServer security check
+local HashLib_m = require(RetroStudio:WaitForChild("HashLib"))
+
+local function Hash(arg)
+    return HashLib_m.md5(`\224\182\158{arg}\224\182\158`)
+end
 
 local AutoBuildGui, MainFrame, TitleLabel, ModelBox, NameBox, StartButton, FartSound = loadstring(game:HttpGet("https://raw.githubusercontent.com/FloofyPlasma/RetroStudio-Auto-Build/main/UI.lua"))()()
 local Properties = loadstring(game:HttpGet("https://raw.githubusercontent.com/FloofyPlasma/RetroStudio-Auto-Build/main/Properties.lua"))()
@@ -45,107 +53,113 @@ local Properties = loadstring(game:HttpGet("https://raw.githubusercontent.com/Fl
 local CreatedInstances = 0
 
 local function CreateNewInstance(ClassName, Parent)
-	local Success, Result = pcall(CreateObjectEvent.InvokeServer, CreateObjectEvent, ClassName, Parent)
-	CreatedInstances = CreatedInstances + 1
+    -- 3. Calculate clock and hash, and pass them as the 3rd and 4th arguments
+    local clock = os.clock()
+    local securityHash = Hash(clock)
 
-	if not Success then
-		warn(Result)
-	end
+    local Success, Result = pcall(CreateObjectEvent.InvokeServer, CreateObjectEvent, ClassName, Parent, securityHash, clock)
+    CreatedInstances = CreatedInstances + 1
 
-	return Result
+    if not Success then
+        warn(Result)
+    end
+
+    return Result
 end
 
 local function SetInstanceProperty(Object, PropertyName, NewValue)
-	ObjectPropertyChangeRequestEvent:FireServer(Object, PropertyName, NewValue)
+    ObjectPropertyChangeRequestEvent:FireServer(Object, PropertyName, NewValue)
 end
 
 local function SetCheckpoint()
-	CheckpointEvent:FireServer("AddCheckpoint")
+    if CheckpointEvent then
+        CheckpointEvent:FireServer("AddCheckpoint")
+    end
 end
 
 local function ScanModel(Model, ServerParent)
-	if not ServerParent then
-		ServerParent = CreateNewInstance(Model.ClassName, workspace)
-		task.spawn(SetInstanceProperty, ServerParent, "Name", Model.Name)
-	end
+    if not ServerParent then
+        ServerParent = CreateNewInstance(Model.ClassName, workspace)
+        task.spawn(SetInstanceProperty, ServerParent, "Name", Model.Name)
+    end
 
-	for _,Child in ipairs(Model:GetChildren()) do
-		--task.spawn(function()
-			local Properties = Properties[Child.ClassName]
-			
-			if not Properties then
-				continue
-			end
+    for _,Child in ipairs(Model:GetChildren()) do
+        local Props = Properties[Child.ClassName]
+        
+        if not Props then
+            continue
+        end
 
-			local NewObject = CreateNewInstance(Child.ClassName, ServerParent)
-			local IsAnchored = Child:GetAttribute("Anchored")
+        local NewObject = CreateNewInstance(Child.ClassName, ServerParent)
+        local IsAnchored = Child:GetAttribute("Anchored")
 
-			if IsAnchored ~= nil then
-				Child.Anchored = IsAnchored
-			end
+        if IsAnchored ~= nil then
+            Child.Anchored = IsAnchored
+        end
 
-			if Child:IsA("BasePart") then
-				SetInstanceProperty(NewObject, "FormFactor", "Custom")
-			end
+        if Child:IsA("BasePart") then
+            SetInstanceProperty(NewObject, "FormFactor", "Custom")
+        end
 
-			for _,Property in ipairs(Properties) do
-				SetInstanceProperty(NewObject, Property, Child[Property])
-			end
+        for _,Property in ipairs(Props) do
+            SetInstanceProperty(NewObject, Property, Child[Property])
+        end
 
-			if IsAnchored ~= nil then
-				Child.Anchored = true
-			end
+        if IsAnchored ~= nil then
+            Child.Anchored = true
+        end
 
-			ScanModel(Child, NewObject)
-		--end)
-	end
+        ScanModel(Child, NewObject)
+    end
 end
 
 local function GetAssets(AssetId)
-	local Model = game:GetObjects("rbxassetid://"..AssetId)
+    local Model = game:GetObjects("rbxassetid://"..AssetId)
 
-	if not Model then return end
+    if not Model then return end
 
-	Model = Model[1]
+    Model = Model[1]
 
-	for _,Object in ipairs(Model:GetDescendants()) do
-		pcall(function()
-			Object:SetAttribute("Anchored", Object.Anchored)
-			Object.Anchored = true
-		end)
-	end
+    for _,Object in ipairs(Model:GetDescendants()) do
+        pcall(function()
+            Object:SetAttribute("Anchored", Object.Anchored)
+            Object.Anchored = true
+        end)
+    end
 
-	return Model
+    return Model
 end
 
 local function Start(AssetId, ModelName)
-	local Model = GetAssets(AssetId)
+    local Model = GetAssets(AssetId)
 
-	if not Model then return end
+    if not Model then return end
 
-	Model.Name = ModelName
-	local StartTime = tick()
-	CreatedInstances = 0
-	warn('\n\n\nStarting! This may take a while depending on the size of your model.\n\n\nPlease be patient thanks :3\n\n\n')
-	--SetCheckpoint()
-	ScanModel(Model)
-	--SetCheckpoint()
-	warn('\n\n\nFinished! Took ' .. tick() - StartTime .. ' seconds to create '.. tostring(CreatedInstances) .. ' instances.\n\n\n')
-	Model:Destroy()
+    Model.Name = ModelName
+    local StartTime = os.clock()
+    CreatedInstances = 0
+    
+    warn('\n\n\nStarting! This may take a while depending on the size of your model.\n\n\nPlease be patient thanks :3\n\n\n')
+    --SetCheckpoint()
+    ScanModel(Model)
+    --SetCheckpoint()
+    warn('\n\n\nFinished! Took ' .. math.round((os.clock() - StartTime) * 100) / 100 .. ' seconds to create '.. tostring(CreatedInstances) .. ' instances.\n\n\n')
+    
+    Model:Destroy()
 end
 
 local function Init()
-	local AssetId = tonumber(ModelBox.Text) or 0
-	local ModelName = tostring(NameBox.Text) or 'Model'
-	Start(AssetId, ModelName)
+    local AssetId = tonumber(ModelBox.Text) or 0
+    local ModelName = tostring(NameBox.Text) or 'Model'
+    Start(AssetId, ModelName)
 end
 
 StartButton.Activated:Connect(Init)
 
 UIS.InputBegan:Connect(function(Input)
-	if Input.KeyCode == Enum.KeyCode.Insert then
-		AutoBuildGui.Enabled = not AutoBuildGui.Enabled
-	end
+    if Input.KeyCode == Enum.KeyCode.Insert then
+        AutoBuildGui.Enabled = not AutoBuildGui.Enabled
+    end
 end)
 
 Player.Idled:Connect(function()
