@@ -1,19 +1,20 @@
 local Properties = {
 	["BasePart"] = {
 		"BrickColor", "CanCollide", "Anchored", "Locked", "Velocity", "Transparency", "Reflectance", "Material",
-		"BackSurface", "BottomSurface", "FrontSurface", "LeftSurface", "RightSurface", "TopSurface",  "Name", "CFrame", "Size"
+		"BackSurface", "BottomSurface", "FrontSurface", "LeftSurface", "RightSurface", "TopSurface",  "Name", "CFrame", "Size",
+		"Elasticity", "Friction", "RotVelocity"
 	},
 	["PointLight"] = {
-		"Brightness", "Color", "Range", "Shadows"
+		"Brightness", "Color", "Range", "Shadows", "Enabled"
 	},
 	["SurfaceLight"] = {
 		"Angle", "Brightness", "Color", "Enabled", "Face", "Range", "Shadows"
 	},
 	["Smoke"] = {
-		"Color", "Opacity", "Size", "RiseVelocity"
+		"Color", "Opacity", "Size", "RiseVelocity", "Enabled"
 	},
 	["Fire"] = {
-		"Color", "Heat", "Size", "SecondaryColor"
+		"Color", "Heat", "Size", "SecondaryColor", "Enabled"
 	},
 	["Decal"] = {
 		"Texture", "Transparency", "Color3", "Face"
@@ -59,6 +60,7 @@ local Properties = {
 		"AttachmentRight",
 		"AttachmentUp"
 	},
+	["Backpack"] = {},
 	["BindableEvent"] = {},
 	["BindableFunction"] = {},
 	["BodyAngularVelocity"] = {
@@ -66,7 +68,7 @@ local Properties = {
 		"angularvelocity",
 		"maxTorque"
 	},
-	["Body Colors"] = {
+	["BodyColors"] = {
 		"HeadColor",
 		"LeftArmColor",
 		"LeftLegColor",
@@ -137,6 +139,12 @@ local Properties = {
 		"Tone"
 	},
 	["DialogChoice"] = {},
+	["Explosion"] = {
+		"BlastPressure",
+		"BlastRadius",
+		"Position",
+		"Visible"
+	},
 	["Flag"] = {
 		"GripForward",
 		"GripPos",
@@ -187,8 +195,24 @@ local Properties = {
 		"TopSurface",
 		"CFrame"
 	},
+	["FloorWire"] = {
+		"Color",
+		"Velocity",
+		"Texture",
+		"TextureSize",
+		"StudsBetweenTextures"
+	},
 	["Folder"] = {},
 	["ForceField"] = {},
+	["Glue"] = {
+		"Part0",
+		"Part1",
+	},
+	["Handles"] = {
+		"Style",
+		"Adornee",
+		"Visible"
+	},
 	["Hat"] = {
 		"AttachmentForward",
 		"AttachmentPos",
@@ -237,6 +261,26 @@ local Properties = {
 		"Transparency",
 		"Visible"
 	},
+	["SelectionPartLasso"] = {
+		"Color3",
+		"Humanoid",
+		"Part",
+		"Visible"
+	},
+	["SelectionPointLasso"] = {
+		"Color3",
+		"Humanoid",
+		"Point",
+		"Visible"
+	},
+	["SelectionSphere"] = {
+		"Adornee",
+		"Color3",
+		"SurfaceColor3",
+		"SurfaceTransparency",
+		"Transparency",
+		"Visible"
+	},
 	["Humanoid"] = {
 		"Health",
 		"JumpPower",
@@ -252,6 +296,35 @@ local Properties = {
 		"Part0",
 		"Part1"
 	},
+	["Motor6D"] = {
+		"Part0",
+		"Part1",
+		"C0",
+		"C1"
+	},
+	["ParticleEmitter"] = {
+		"Enabled",
+		"Color",
+		"Size",
+		"Transparency",
+		"LightEmission",
+		"LightInfluence",
+		"LockedToPart",
+		"Rate",
+		"Rotation",
+		"RotSpeed",
+		"Speed",
+		"Texture",
+		"VelocitySpread",
+		"Acceleration",
+		"Drag",
+		"EmissionDirection",
+		"Lifetime",
+		"SpreadAngle",
+		"ZOffset"
+	},
+	["RemoteEvent"] = {},
+	["RemoteFunction"] = {},
 	["RocketPropulsion"] = {
 		"CartoonFactor",
 		"TargetOffset",
@@ -307,6 +380,27 @@ local Properties = {
 		"ZIndex",
 		"ClipsDescendants",
 		"Draggable"
+	},
+	["ScrollingFrame"] = {
+		"Active",
+		"BackgroundColor3",
+		"BackgroundTransparency",
+		"BorderColor3",
+		"BorderSizePixel",
+		"Position",
+		"Size",
+		"SizeConstraint",
+		"Visible",
+		"ZIndex",
+		"ClipsDescendants",
+		"Draggable",
+		"CanvasSize",
+		"CanvasPosition",
+		"ScrollBarThickness",
+		"ScrollingEnabled",
+		"TopImage",
+		"MidImage",
+		"BottomImage"
 	},
 	["ImageButton"] = {
 		"Active",
@@ -424,7 +518,7 @@ Properties.Part = Properties.BasePart
 Properties.CornerWedgePart = Properties.BasePart
 
 Properties.Seat = Properties.BasePart
-Properties.Truss = Properties.BasePart
+Properties.TrussPart = Properties.BasePart
 Properties.VehicleSeat = Properties.BasePart
 Properties.SpawnLocation = Properties.BasePart
 Properties.CylinderMesh = Properties.Mesh
@@ -436,6 +530,8 @@ Properties.NumberValue = Properties.StringValue
 Properties.IntValue = Properties.StringValue
 Properties.BoolValue = Properties.StringValue
 Properties.BrickColorValue = Properties.StringValue
+Properties.CFrameValue = Properties.StringValue
+Properties.Color3Value = Properties.StringValue
 
 Properties.Hint = Properties.Message
 
