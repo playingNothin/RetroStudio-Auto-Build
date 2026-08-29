@@ -144,12 +144,58 @@ local function ScanModel(Model, ServerParent)
             Child.Anchored = IsAnchored
         end
 
+        -- Check if part requires a SpecialMesh for sub-0.2 stud dimensions
+        local needsMesh = false
+        local clampedSize = nil
+        local hasExistingMesh = Child:FindFirstChildOfClass("SpecialMesh") or Child:FindFirstChildOfClass("DataModelMesh")
+
         if Child:IsA("BasePart") then
             SetInstanceProperty(NewObject, "FormFactor", "Custom")
+            
+            if not hasExistingMesh and (Child.Size.X < 0.2 or Child.Size.Y < 0.2 or Child.Size.Z < 0.2) then
+                needsMesh = true
+                clampedSize = Vector3.new(
+                    math.max(0.2, Child.Size.X),
+                    math.max(0.2, Child.Size.Y),
+                    math.max(0.2, Child.Size.Z)
+                )
+            end
         end
 
+        -- Apply properties (override Size with clamped size if using SpecialMesh workaround)
         for _,Property in ipairs(Props) do
-            SetInstanceProperty(NewObject, Property, Child[Property])
+            local value = Child[Property]
+            if Property == "Size" and needsMesh then
+                value = clampedSize
+            end
+            SetInstanceProperty(NewObject, Property, value)
+        end
+
+        -- Instantiate SpecialMesh and scale visual mesh down to target size
+        if needsMesh then
+            local meshObj = CreateNewInstance("SpecialMesh", NewObject)
+            
+            local meshType = Enum.MeshType.Brick
+            if Child:IsA("WedgePart") then
+                meshType = Enum.MeshType.Wedge
+            elseif Child:IsA("Part") then
+                pcall(function()
+                    if Child.Shape == Enum.PartType.Ball then
+                        meshType = Enum.MeshType.Sphere
+                    elseif Child.Shape == Enum.PartType.Cylinder then
+                        meshType = Enum.MeshType.Cylinder
+                    end
+                end)
+            end
+
+            local scaleVector = Vector3.new(
+                Child.Size.X / clampedSize.X,
+                Child.Size.Y / clampedSize.Y,
+                Child.Size.Z / clampedSize.Z
+            )
+
+            SetInstanceProperty(meshObj, "MeshType", meshType)
+            SetInstanceProperty(meshObj, "Scale", scaleVector)
         end
 
         if IsAnchored ~= nil then
