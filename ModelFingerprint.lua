@@ -8,7 +8,7 @@
 
 local ModelFingerprint = {}
 
-local DEFAULT_PRECISION = 3
+local DEFAULT_PRECISION = 5
 
 local function roundNumber(value: number, precision: number): number
 	local multiplier = 10 ^ precision
