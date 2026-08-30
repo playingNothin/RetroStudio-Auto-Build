@@ -3,12 +3,27 @@
 -- Creates deterministic fingerprints for Roblox models based on their
 -- internal structure and properties.
 --
--- World-space position and model pivot position are ignored.
--- The model's bounding-box CFrame is used as the canonical coordinate system.
+-- World-space position and model pivot orientation are ignored.
+-- A geometry-derived, axis-aligned bounding-box CFrame is used as the
+-- canonical coordinate system (computed directly from part corners,
+-- NOT from Model:GetBoundingBox(), whose orientation is tied to the
+-- model's WorldPivot/PrimaryPart and is therefore not guaranteed to be
+-- consistent between otherwise-identical model instances).
 
 local ModelFingerprint = {}
 
 local DEFAULT_PRECISION = 5
+
+local CORNER_SIGNS = {
+	Vector3.new(1, 1, 1),
+	Vector3.new(1, 1, -1),
+	Vector3.new(1, -1, 1),
+	Vector3.new(1, -1, -1),
+	Vector3.new(-1, 1, 1),
+	Vector3.new(-1, 1, -1),
+	Vector3.new(-1, -1, 1),
+	Vector3.new(-1, -1, -1),
+}
 
 local function roundNumber(value: number, precision: number): number
 	local multiplier = 10 ^ precision
@@ -27,6 +42,50 @@ local function addCFrame(data: {number}, cframe: CFrame, precision: number)
 	end
 end
 
+--[[
+	Computes a purely geometry-derived, axis-aligned reference CFrame for
+	a model. Unlike Model:GetBoundingBox(), this does NOT depend on the
+	model's WorldPivot or PrimaryPart in any way, so two models with
+	identical part geometry always produce the same reference frame,
+	regardless of how their pivots happen to be set.
+
+	Only translation is removed (position is centered on the geometric
+	midpoint of the AABB); rotation is left as world-axis-aligned
+	(identity), so models that are genuinely rotated relative to one
+	another in the world will still (correctly) fingerprint differently.
+]]
+local function computeCanonicalReference(model: Model): CFrame
+	local minPoint: Vector3? = nil
+	local maxPoint: Vector3? = nil
+
+	for _, object in ipairs(model:GetDescendants()) do
+		if object:IsA("BasePart") then
+			local cf = object.CFrame
+			local half = object.Size / 2
+
+			for _, signs in ipairs(CORNER_SIGNS) do
+				local corner = cf:PointToWorldSpace(half * signs)
+
+				if not minPoint or not maxPoint then
+					minPoint = corner
+					maxPoint = corner
+				else
+					minPoint = minPoint:Min(corner)
+					maxPoint = maxPoint:Max(corner)
+				end
+			end
+		end
+	end
+
+	if not minPoint or not maxPoint then
+		-- No BaseParts found; fall back to the model's own position
+		-- so the function still returns something sane.
+		return CFrame.new(model:GetPivot().Position)
+	end
+
+	return CFrame.new((minPoint + maxPoint) / 2)
+end
+
 local function getInstanceData(
 	model: Model,
 	object: Instance,
@@ -38,8 +97,9 @@ local function getInstanceData(
 	}
 
 	if object:IsA("BasePart") then
-		-- Use the model's bounding box as the canonical reference.
-		-- This avoids relying on potentially inconsistent model pivots.
+		-- Use the geometry-derived reference frame as the canonical frame.
+		-- This avoids relying on Model:GetBoundingBox(), whose orientation
+		-- tracks the model's pivot rather than its physical contents.
 		local relativeCFrame = referenceCFrame:ToObjectSpace(object.CFrame)
 
 		data.CFrame = {}
@@ -211,9 +271,11 @@ local function buildSerialized(model: Model, precision: number): string
 
 	-- This is our canonical reference frame.
 	--
-	-- Unlike GetPivot(), this is derived directly from the
-	-- model's physical contents.
-	local referenceCFrame = model:GetBoundingBox()
+	-- Derived directly from the model's physical part geometry (an
+	-- axis-aligned bounding-box center), NOT from Model:GetBoundingBox()
+	-- or the model's pivot, so it stays consistent across instances that
+	-- are structurally identical regardless of pivot/grouping history.
+	local referenceCFrame = computeCanonicalReference(model)
 
 	for _, object in ipairs(model:GetDescendants()) do
 		if object:IsA("BasePart")
