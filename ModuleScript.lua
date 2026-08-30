@@ -142,14 +142,6 @@ local function ScanModel(Model, ServerParent)
 			-- internal structure and geometry.
 			cacheKey = ModelFingerprint.Create(Child)
 
-print(
-	"[Fingerprint]",
-	Child:GetFullName(),
-	cacheKey,
-	"Parts:",
-	expectedPartCount
-)
-
 			if ModelCache[cacheKey] and MiscObjectInteraction and BulkMoveToRequest then
 				local OriginalServerInstance = ModelCache[cacheKey]
 				local DuplicatedInstance = nil
