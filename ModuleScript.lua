@@ -137,7 +137,17 @@ local function ScanModel(Model, ServerParent)
             continue
         end
 
-        local NewObject = CreateNewInstance(Child.ClassName, ServerParent)
+        -- [FIX ADDED HERE]: Intercept Parts shaped as Wedges and force them to be WedgeParts
+        local targetClassName = Child.ClassName
+        if targetClassName == "Part" then
+            pcall(function()
+                if tostring(Child.Shape):find("Wedge") then
+                    targetClassName = "WedgePart"
+                end
+            end)
+        end
+
+        local NewObject = CreateNewInstance(targetClassName, ServerParent)
         local IsAnchored = Child:GetAttribute("Anchored")
 
         if IsAnchored ~= nil then
@@ -168,6 +178,12 @@ local function ScanModel(Model, ServerParent)
             if Property == "Size" and needsMesh then
                 value = clampedSize
             end
+            
+            -- Prevent setting 'Shape' on our newly forced WedgePart to avoid errors
+            if targetClassName == "WedgePart" and Property == "Shape" then
+                continue
+            end
+            
             SetInstanceProperty(NewObject, Property, value)
         end
 
@@ -176,14 +192,17 @@ local function ScanModel(Model, ServerParent)
             local meshObj = CreateNewInstance("SpecialMesh", NewObject)
             
             local meshType = Enum.MeshType.Brick
-            if Child:IsA("WedgePart") then
+            if targetClassName == "WedgePart" or Child:IsA("WedgePart") then
                 meshType = Enum.MeshType.Wedge
-            elseif Child:IsA("Part") then
+            elseif targetClassName == "Part" then
                 pcall(function()
                     if Child.Shape == Enum.PartType.Ball then
                         meshType = Enum.MeshType.Sphere
                     elseif Child.Shape == Enum.PartType.Cylinder then
                         meshType = Enum.MeshType.Cylinder
+                    -- [FIX ADDED HERE]: Fallback mesh visual fix for Wedge shapes
+                    elseif tostring(Child.Shape):find("Wedge") then
+                        meshType = Enum.MeshType.Wedge
                     end
                 end)
             end
