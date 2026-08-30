@@ -1,54 +1,62 @@
 --!strict
 -- ModelFingerprint
 -- Creates deterministic fingerprints for Roblox models based on their
--- internal structure and properties, while ignoring world-space position.
+-- internal structure and properties.
+--
+-- World-space position and model pivot position are ignored.
+-- The model's bounding-box CFrame is used as the canonical coordinate system.
 
 local ModelFingerprint = {}
 
 local DEFAULT_PRECISION = 5
 
-local function roundNumber(value: number, precision: number?): number
-	precision = precision or DEFAULT_PRECISION
-
+local function roundNumber(value: number, precision: number): number
 	local multiplier = 10 ^ precision
 	return math.round(value * multiplier) / multiplier
 end
 
-local function addVector3(data: {number}, vector: Vector3)
-	table.insert(data, roundNumber(vector.X))
-	table.insert(data, roundNumber(vector.Y))
-	table.insert(data, roundNumber(vector.Z))
+local function addVector3(data: {number}, vector: Vector3, precision: number)
+	table.insert(data, roundNumber(vector.X, precision))
+	table.insert(data, roundNumber(vector.Y, precision))
+	table.insert(data, roundNumber(vector.Z, precision))
 end
 
-local function addCFrame(data: {number}, cframe: CFrame)
+local function addCFrame(data: {number}, cframe: CFrame, precision: number)
 	for _, value in ipairs({cframe:GetComponents()}) do
-		table.insert(data, roundNumber(value))
+		table.insert(data, roundNumber(value, precision))
 	end
 end
 
-local function getInstanceData(model: Model, object: Instance)
+local function getInstanceData(
+	model: Model,
+	object: Instance,
+	referenceCFrame: CFrame,
+	precision: number
+)
 	local data = {
 		ClassName = object.ClassName,
 	}
 
 	if object:IsA("BasePart") then
-		local relativeCFrame = model:GetPivot():ToObjectSpace(object.CFrame)
+		-- Use the model's bounding box as the canonical reference.
+		-- This avoids relying on potentially inconsistent model pivots.
+		local relativeCFrame = referenceCFrame:ToObjectSpace(object.CFrame)
 
 		data.CFrame = {}
-		addCFrame(data.CFrame, relativeCFrame)
+		addCFrame(data.CFrame, relativeCFrame, precision)
 
 		data.Size = {}
-		addVector3(data.Size, object.Size)
+		addVector3(data.Size, object.Size, precision)
 
 		data.Material = object.Material.Name
-		data.Transparency = roundNumber(object.Transparency)
-		data.Reflectance = roundNumber(object.Reflectance)
+		data.Transparency = roundNumber(object.Transparency, precision)
+		data.Reflectance = roundNumber(object.Reflectance, precision)
 		data.CastShadow = object.CastShadow
 
 		data.Color = {
-			roundNumber(object.Color.R),
-			roundNumber(object.Color.G),
-			roundNumber(object.Color.B),
+			roundNumber(object.Color.R, precision),
+			roundNumber(object.Color.G, precision),
+			roundNumber(object.Color.B, precision),
 		}
 
 		if object:IsA("Part") then
@@ -89,22 +97,22 @@ local function getInstanceData(model: Model, object: Instance)
 		data.TextureId = object.TextureId
 
 		data.Scale = {}
-		addVector3(data.Scale, object.Scale)
+		addVector3(data.Scale, object.Scale, precision)
 
 		data.Offset = {}
-		addVector3(data.Offset, object.Offset)
+		addVector3(data.Offset, object.Offset, precision)
 	end
 
 	if object:IsA("Decal") then
 		data.Texture = object.Texture
 		data.Face = object.Face.Name
-		data.Transparency = roundNumber(object.Transparency)
+		data.Transparency = roundNumber(object.Transparency, precision)
 
 		pcall(function()
 			data.Color3 = {
-				roundNumber(object.Color3.R),
-				roundNumber(object.Color3.G),
-				roundNumber(object.Color3.B),
+				roundNumber(object.Color3.R, precision),
+				roundNumber(object.Color3.G, precision),
+				roundNumber(object.Color3.B, precision),
 			}
 		end)
 	end
@@ -112,25 +120,25 @@ local function getInstanceData(model: Model, object: Instance)
 	if object:IsA("Texture") then
 		data.Texture = object.Texture
 		data.Face = object.Face.Name
-		data.Transparency = roundNumber(object.Transparency)
-		data.StudsPerTileU = roundNumber(object.StudsPerTileU)
-		data.StudsPerTileV = roundNumber(object.StudsPerTileV)
+		data.Transparency = roundNumber(object.Transparency, precision)
+		data.StudsPerTileU = roundNumber(object.StudsPerTileU, precision)
+		data.StudsPerTileV = roundNumber(object.StudsPerTileV, precision)
 
 		pcall(function()
 			data.Color3 = {
-				roundNumber(object.Color3.R),
-				roundNumber(object.Color3.G),
-				roundNumber(object.Color3.B),
+				roundNumber(object.Color3.R, precision),
+				roundNumber(object.Color3.G, precision),
+				roundNumber(object.Color3.B, precision),
 			}
 		end)
 	end
 
 	if object:IsA("Attachment") then
 		data.Position = {}
-		addVector3(data.Position, object.Position)
+		addVector3(data.Position, object.Position, precision)
 
 		data.Orientation = {}
-		addVector3(data.Orientation, object.Orientation)
+		addVector3(data.Orientation, object.Orientation, precision)
 	end
 
 	return data
@@ -159,6 +167,7 @@ local function serializeEntry(data)
 	appendArray(data.Orientation)
 	appendArray(data.Scale)
 	appendArray(data.Offset)
+	appendArray(data.Color3)
 
 	table.insert(parts, tostring(data.Material or ""))
 	table.insert(parts, tostring(data.Transparency or ""))
@@ -197,22 +206,14 @@ local function hashString(value: string): string
 	return string.format("%08x%08x", hash1, hash2)
 end
 
---[[
-	Creates a fingerprint for a model.
-
-	Options:
-		precision: Number of decimal places used when comparing
-		          floating-point values. Default: 5
-
-	Returns:
-		A hexadecimal fingerprint string.
-]]
-function ModelFingerprint.Create(model: Model, precision: number?): string
-	assert(typeof(model) == "Instance" and model:IsA("Model"), "Expected a Model")
-
-	precision = precision or DEFAULT_PRECISION
-
+local function buildSerialized(model: Model, precision: number): string
 	local entries = {}
+
+	-- This is our canonical reference frame.
+	--
+	-- Unlike GetPivot(), this is derived directly from the
+	-- model's physical contents.
+	local referenceCFrame = model:GetBoundingBox()
 
 	for _, object in ipairs(model:GetDescendants()) do
 		if object:IsA("BasePart")
@@ -222,8 +223,14 @@ function ModelFingerprint.Create(model: Model, precision: number?): string
 			or object:IsA("Texture")
 			or object:IsA("Attachment") then
 
-			local data = getInstanceData(model, object)
+			local data = getInstanceData(
+				model,
+				object,
+				referenceCFrame,
+				precision
+			)
 
+			-- Preserve structural depth.
 			local depth = 0
 			local parent = object.Parent
 
@@ -238,57 +245,62 @@ function ModelFingerprint.Create(model: Model, precision: number?): string
 		end
 	end
 
+	-- Make descendant order irrelevant.
 	table.sort(entries)
 
-	return hashString(table.concat(entries, "\n"))
+	return table.concat(entries, "\n")
+end
+
+--[[
+	Creates a fingerprint for a model.
+
+	precision:
+		Number of decimal places used for floating-point values.
+	Lower values make the fingerprint more tolerant of tiny differences.
+
+	Default: 5
+]]
+function ModelFingerprint.Create(model: Model, precision: number?): string
+	assert(
+		typeof(model) == "Instance" and model:IsA("Model"),
+		"Expected a Model"
+	)
+
+	precision = precision or DEFAULT_PRECISION
+
+	local serialized = buildSerialized(model, precision)
+
+	return hashString(serialized)
 end
 
 --[[
 	Returns true when two models have identical fingerprints.
 ]]
-function ModelFingerprint.Compare(modelA: Model, modelB: Model, precision: number?): boolean
-	return ModelFingerprint.Create(modelA, precision) == ModelFingerprint.Create(modelB, precision)
+function ModelFingerprint.Compare(
+	modelA: Model,
+	modelB: Model,
+	precision: number?
+): boolean
+	return ModelFingerprint.Create(modelA, precision)
+		== ModelFingerprint.Create(modelB, precision)
 end
 
 --[[
 	Returns the raw serialized structural representation before hashing.
-
-	This is useful for debugging why two models don't match.
+Useful for debugging.
 ]]
-function ModelFingerprint.Serialize(model: Model, precision: number?): string
-	assert(typeof(model) == "Instance" and model:IsA("Model"), "Expected a Model")
+function ModelFingerprint.Serialize(
+	model: Model,
+	precision: number?
+): string
+	assert(
+		typeof(model) == "Instance" and model:IsA("Model"),
+		"Expected a Model"
+	)
 
 	precision = precision or DEFAULT_PRECISION
 
-	local entries = {}
-
-	for _, object in ipairs(model:GetDescendants()) do
-		if object:IsA("BasePart")
-			or object:IsA("SpecialMesh")
-			or object:IsA("DataModelMesh")
-			or object:IsA("Decal")
-			or object:IsA("Texture")
-			or object:IsA("Attachment") then
-
-			local data = getInstanceData(model, object)
-
-			local depth = 0
-			local parent = object.Parent
-
-			while parent and parent ~= model do
-				depth += 1
-				parent = parent.Parent
-			end
-
-			data.Depth = depth
-
-			table.insert(entries, serializeEntry(data))
-		end
-	end
-
-	table.sort(entries)
-
-	return table.concat(entries, "\n")
+	return buildSerialized(model, precision)
 end
 
 return ModelFingerprint
