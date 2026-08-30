@@ -142,6 +142,14 @@ local function ScanModel(Model, ServerParent)
 			-- internal structure and geometry.
 			cacheKey = ModelFingerprint.Create(Child)
 
+print(
+	"[Fingerprint]",
+	Child:GetFullName(),
+	cacheKey,
+	"Parts:",
+	expectedPartCount
+)
+
 			if ModelCache[cacheKey] and MiscObjectInteraction and BulkMoveToRequest then
 				local OriginalServerInstance = ModelCache[cacheKey]
 				local DuplicatedInstance = nil
@@ -169,52 +177,52 @@ local function ScanModel(Model, ServerParent)
 				connection:Disconnect()
 
 				if DuplicatedInstance then
-					-- Wait until all duplicated parts have replicated.
-					local serverParts = {}
-					local repTimeout = os.clock()
+	-- Wait until client receives all replicated parts
+	local serverParts = {}
+	local repTimeout = os.clock()
 
-					repeat
-						task.wait(0.1)
+	repeat
+		task.wait(0.1)
+		serverParts = {}
 
-						serverParts = {}
+		for _, sp in ipairs(DuplicatedInstance:GetDescendants()) do
+			if sp:IsA("BasePart") then
+				table.insert(serverParts, sp)
+			end
+		end
+	until #serverParts >= expectedPartCount
+		or (os.clock() - repTimeout > 10)
 
-						for _, sp in ipairs(DuplicatedInstance:GetDescendants()) do
-							if sp:IsA("BasePart") then
-								table.insert(serverParts, sp)
-							end
-						end
-					until #serverParts >= expectedPartCount
-						or (os.clock() - repTimeout > 10)
+	-- KEEP YOUR EXISTING POSITIONING CODE EXACTLY AS IT WAS
+	local targetCFrame = Child:GetBoundingBox()
+	local originalCFrame = OriginalServerInstance:GetBoundingBox()
+	local offset = targetCFrame * originalCFrame:Inverse()
 
-					-- Get target and original bounding boxes.
-					local targetCFrame = Child:GetBoundingBox()
-					local originalCFrame = OriginalServerInstance:GetBoundingBox()
+	local moveParts = {}
+	local targetCFrames = {}
 
-					-- Calculate the transform between them.
-					local offset = targetCFrame * originalCFrame:Inverse()
+	for _, sp in ipairs(serverParts) do
+		table.insert(moveParts, sp)
+		table.insert(targetCFrames, offset * sp.CFrame)
+	end
 
-					local moveParts = {}
-					local targetCFrames = {}
+	if #moveParts > 0 then
+		pcall(function()
+			BulkMoveToRequest:InvokeServer(
+				moveParts,
+				targetCFrames,
+				{}
+			)
+		end)
+	end
 
-					for _, sp in ipairs(serverParts) do
-						table.insert(moveParts, sp)
-						table.insert(targetCFrames, offset * sp.CFrame)
-					end
+	-- ONLY ADD THIS
+	DuplicatedInstance.Parent = ServerParent
 
-					if #moveParts > 0 then
-						pcall(function()
-							BulkMoveToRequest:InvokeServer(
-								moveParts,
-								targetCFrames,
-								{}
-							)
-						end)
-					end
-
-					task.wait(0.5)
-				else
-					warn("Duplication timed out for: " .. Child.Name)
-				end
+	task.wait(0.5)
+else
+	warn("Duplication timed out for: " .. Child.Name)
+end
 
 				continue
 			end
@@ -339,21 +347,31 @@ local function GetAssets(AssetId)
 end
 
 local function Start(AssetId, ModelName)
-    local Model = GetAssets(AssetId)
+	ModelCache = {}
 
-    if not Model then return end
+	local Model = GetAssets(AssetId)
+	if not Model then
+		return
+	end
 
-    Model.Name = ModelName
-    local StartTime = os.clock()
-    CreatedInstances = 0
-    
-    warn('\n\n\nStarting! This may take a while depending on the size of your model.\n\n\nPlease be patient thanks :3\n\n\n')
-    --SetCheckpoint()
-    ScanModel(Model)
-    --SetCheckpoint()
-    warn('\n\n\nFinished! Took ' .. math.round((os.clock() - StartTime) * 100) / 100 .. ' seconds to create '.. tostring(CreatedInstances) .. ' instances.\n\n\n')
-    
-    Model:Destroy()
+	Model.Name = ModelName
+
+	local StartTime = os.clock()
+	CreatedInstances = 0
+
+	warn('\n\n\nStarting! This may take a while depending on the size of your model.\n\n\nPlease be patient thanks :3\n\n\n')
+
+	ScanModel(Model)
+
+	warn(
+		'\n\n\nFinished! Took ' ..
+		math.round((os.clock() - StartTime) * 100) / 100 ..
+		' seconds to create ' ..
+		tostring(CreatedInstances) ..
+		' instances.\n\n\n'
+	)
+
+	Model:Destroy()
 end
 
 local function Init()
