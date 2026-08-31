@@ -96,7 +96,10 @@ local function WriteLog(text, textColor)
     local LogEntry = Instance.new("TextLabel")
     LogEntry.Name = "LogEntry"
     LogEntry.BackgroundTransparency = 1
-    LogEntry.Size = UDim2.new(1, 0, 0, 16)
+    -- Give an 8-pixel margin for the scrollbar, base height of 16
+    LogEntry.Size = UDim2.new(1, -8, 0, 16) 
+    -- Automatically expand the height downward if the text wraps
+    LogEntry.AutomaticSize = Enum.AutomaticSize.Y 
     LogEntry.Font = Enum.Font.Code
     LogEntry.TextSize = 12
     LogEntry.TextColor3 = textColor
