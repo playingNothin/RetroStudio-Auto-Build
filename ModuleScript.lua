@@ -31,16 +31,13 @@ end
 
 warn('Script Loaded')
 
--- 1. Updated Paths to RetroStudio's new _RetroStudio folder structure
 local RetroStudio = ReplicatedStorage:WaitForChild("_RetroStudio")
 local Remotes = RetroStudio:WaitForChild("Remotes")
 
 local CreateObjectEvent = Remotes:WaitForChild("CreateObject")
 local ObjectPropertyChangeRequestEvent = Remotes:WaitForChild("ObjectPropertyChangeRequested")
--- Fallback in case ChangeHistoryInteractionRequested hasn't been moved yet
 local CheckpointEvent = Remotes:FindFirstChild("ChangeHistoryInteractionRequested") or ReplicatedStorage:FindFirstChild("RemoteEvents") and ReplicatedStorage.RemoteEvents:FindFirstChild("ChangeHistoryInteractionRequested")
 
--- 2. Require HashLib to bypass the InvokeServer security check
 local HashLib_m = require(RetroStudio:WaitForChild("HashLib"))
 
 local function Hash(arg)
@@ -49,7 +46,6 @@ end
 
 print("Fetching UI and Properties...")
 
--- Safely grab the UI code
 local uiSuccess, uiCode = pcall(function()
     return game:HttpGet("https://raw.githubusercontent.com/playingNothin/RetroStudio-Auto-Build/refs/heads/main/UI.lua")
 end)
@@ -57,24 +53,19 @@ if not uiSuccess or uiCode:find("404: Not Found") then
     return warn("Failed to fetch UI.lua. Is the GitHub repository set to Private?")
 end
 
--- Safely compile the UI code
 local uiFunc, compileError = loadstring(uiCode)
 if not uiFunc then
     return warn("Syntax error inside UI.lua: " .. tostring(compileError))
 end
 
--- Safely execute the UI code
--- Notice we handle both the ()() and () formats safely here
 local uiResult = uiFunc()
-local AutoBuildGui, MainFrame, TitleLabel, ModelBox, NameBox, StartButton, FartSound
+local AutoBuildGui, MainFrame, TitleLabel, ModelBox, NameBox, StartButton, FartSound, LogContainer
 if type(uiResult) == "function" then
-    AutoBuildGui, MainFrame, TitleLabel, ModelBox, NameBox, StartButton, FartSound = uiResult()
+    AutoBuildGui, MainFrame, TitleLabel, ModelBox, NameBox, StartButton, FartSound, LogContainer = uiResult()
 else
-    AutoBuildGui, MainFrame, TitleLabel, ModelBox, NameBox, StartButton, FartSound = uiResult, nil, nil, nil, nil, nil, nil -- Adjust this depending on what your UI.lua actually returns
+    AutoBuildGui, MainFrame, TitleLabel, ModelBox, NameBox, StartButton, FartSound, LogContainer = uiResult, nil, nil, nil, nil, nil, nil, nil
 end
 
-
--- Safely grab the Properties code
 local propSuccess, propCode = pcall(function()
     return game:HttpGet("https://raw.githubusercontent.com/playingNothin/RetroStudio-Auto-Build/refs/heads/main/Properties.lua")
 end)
@@ -88,19 +79,52 @@ if not propFunc then
 end
 
 local Properties = propFunc()
-print("Successfully loaded UI and Properties!")
+
+-- ==========================================
+-- LOGGING SYSTEM
+-- ==========================================
+local UIListLayout = LogContainer and LogContainer:FindFirstChildOfClass("UIListLayout")
+
+local function WriteLog(text, textColor)
+    textColor = textColor or Color3.fromRGB(255, 255, 255)
+    
+    if not LogContainer then
+        print("[Auto-Build] " .. text)
+        return
+    end
+
+    local LogEntry = Instance.new("TextLabel")
+    LogEntry.Name = "LogEntry"
+    LogEntry.BackgroundTransparency = 1
+    LogEntry.Size = UDim2.new(1, 0, 0, 16)
+    LogEntry.Font = Enum.Font.Code
+    LogEntry.TextSize = 12
+    LogEntry.TextColor3 = textColor
+    LogEntry.TextXAlignment = Enum.TextXAlignment.Left
+    LogEntry.TextWrapped = true
+    LogEntry.Text = text
+    LogEntry.Parent = LogContainer
+
+    task.spawn(function()
+        task.wait()
+        if UIListLayout then
+            LogContainer.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
+        end
+        LogContainer.CanvasPosition = Vector2.new(0, 99999)
+    end)
+end
+
+WriteLog("Successfully loaded UI and Properties!", Color3.fromRGB(100, 255, 100))
 
 -- ==========================================
 -- BUILDER CONFIGURATION
 -- ==========================================
-local DELAY_TIME = 0.05 -- Increase this if you get kicked for creating objects too quickly!
+local DELAY_TIME = 0.05
 local CreatedInstances = 0
 
 local function CreateNewInstance(ClassName, Parent)
-    -- YIELD TO PREVENT RATE LIMIT/KICK
     task.wait(DELAY_TIME)
 
-    -- 3. Calculate clock and hash, and pass them as the 3rd and 4th arguments
     local clock = os.clock()
     local securityHash = Hash(clock)
 
@@ -108,7 +132,7 @@ local function CreateNewInstance(ClassName, Parent)
     CreatedInstances = CreatedInstances + 1
 
     if not Success then
-        warn(Result)
+        WriteLog("ERROR: " .. tostring(Result), Color3.fromRGB(255, 50, 50))
     end
 
     return Result
@@ -137,7 +161,6 @@ local function ScanModel(Model, ServerParent)
             continue
         end
 
-        -- [FIX ADDED HERE]: Intercept Parts shaped as Wedges and force them to be WedgeParts
         local targetClassName = Child.ClassName
         if targetClassName == "Part" then
             pcall(function()
@@ -154,7 +177,6 @@ local function ScanModel(Model, ServerParent)
             Child.Anchored = IsAnchored
         end
 
-        -- Check if part requires a SpecialMesh for sub-0.2 stud dimensions
         local needsMesh = false
         local clampedSize = nil
         local hasExistingMesh = Child:FindFirstChildOfClass("SpecialMesh") or Child:FindFirstChildOfClass("DataModelMesh")
@@ -172,14 +194,12 @@ local function ScanModel(Model, ServerParent)
             end
         end
 
-        -- Apply properties (override Size with clamped size if using SpecialMesh workaround)
         for _,Property in ipairs(Props) do
             local value = Child[Property]
             if Property == "Size" and needsMesh then
                 value = clampedSize
             end
             
-            -- Prevent setting 'Shape' on our newly forced WedgePart to avoid errors
             if targetClassName == "WedgePart" and Property == "Shape" then
                 continue
             end
@@ -187,7 +207,6 @@ local function ScanModel(Model, ServerParent)
             SetInstanceProperty(NewObject, Property, value)
         end
 
-        -- Instantiate SpecialMesh and scale visual mesh down to target size
         if needsMesh then
             local meshObj = CreateNewInstance("SpecialMesh", NewObject)
             
@@ -200,7 +219,6 @@ local function ScanModel(Model, ServerParent)
                         meshType = Enum.MeshType.Sphere
                     elseif Child.Shape == Enum.PartType.Cylinder then
                         meshType = Enum.MeshType.Cylinder
-                    -- [FIX ADDED HERE]: Fallback mesh visual fix for Wedge shapes
                     elseif tostring(Child.Shape):find("Wedge") then
                         meshType = Enum.MeshType.Wedge
                     end
@@ -245,17 +263,20 @@ end
 local function Start(AssetId, ModelName)
     local Model = GetAssets(AssetId)
 
-    if not Model then return end
+    if not Model then 
+        WriteLog("Failed to load Asset ID: " .. tostring(AssetId), Color3.fromRGB(255, 50, 50))
+        return 
+    end
 
     Model.Name = ModelName
     local StartTime = os.clock()
     CreatedInstances = 0
     
-    warn('\n\n\nStarting! This may take a while depending on the size of your model.\n\n\nPlease be patient thanks :3\n\n\n')
-    --SetCheckpoint()
+    WriteLog("Starting! This may take a while...", Color3.fromRGB(255, 255, 50))
     ScanModel(Model)
-    --SetCheckpoint()
-    warn('\n\n\nFinished! Took ' .. math.round((os.clock() - StartTime) * 100) / 100 .. ' seconds to create '.. tostring(CreatedInstances) .. ' instances.\n\n\n')
+    
+    local TotalTime = math.round((os.clock() - StartTime) * 100) / 100
+    WriteLog("Finished! Took " .. TotalTime .. "s to create " .. tostring(CreatedInstances) .. " instances.", Color3.fromRGB(50, 255, 255))
     
     Model:Destroy()
 end
@@ -277,25 +298,21 @@ end)
 -- ==========================================
 -- ANTI-AFK SYSTEM
 -- ==========================================
--- First attempt: Completely disable the game's idle kick if the executor supports it
 local success, err = pcall(function()
     for _, connection in pairs(getconnections(Player.Idled)) do
         connection:Disable()
     end
 end)
 
--- Second attempt: Fallback to the improved VirtualUser clicking method
 Player.Idled:Connect(function()
-    -- CaptureController helps this register even when tabbed out
     vu:CaptureController()
     vu:ClickButton2(Vector2.new())
     
-    -- Classic backup movement
     vu:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
     task.wait(0.5)
     vu:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
     
-    print("Anti-AFK triggered to prevent disconnection.")
+    WriteLog("Anti-AFK triggered to prevent disconnection.", Color3.fromRGB(150, 150, 150))
 end)
 
 return {}
