@@ -83,6 +83,7 @@ local Properties = propFunc()
 -- ==========================================
 -- LOGGING SYSTEM
 -- ==========================================
+local TextService = game:GetService("TextService")
 local UIListLayout = LogContainer and LogContainer:FindFirstChildOfClass("UIListLayout")
 
 local function WriteLog(text, textColor)
@@ -93,13 +94,22 @@ local function WriteLog(text, textColor)
         return
     end
 
+    -- 1. Calculate the exact height the text requires
+    -- LogContainer width is 161, minus 8 for scrollbar = 153 available width
+    local textBounds = TextService:GetTextSize(
+        text, 
+        12, -- TextSize
+        Enum.Font.Code, 
+        Vector2.new(153, 10000) -- Max width, infinite height
+    )
+    
+    -- 2. Add 4 pixels of padding to the required height so it doesn't clip
+    local requiredHeight = math.max(16, textBounds.Y + 4)
+
     local LogEntry = Instance.new("TextLabel")
     LogEntry.Name = "LogEntry"
     LogEntry.BackgroundTransparency = 1
-    -- Give an 8-pixel margin for the scrollbar, base height of 16
-    LogEntry.Size = UDim2.new(1, -8, 0, 16) 
-    -- Automatically expand the height downward if the text wraps
-    LogEntry.AutomaticSize = Enum.AutomaticSize.Y 
+    LogEntry.Size = UDim2.new(1, -8, 0, requiredHeight) 
     LogEntry.Font = Enum.Font.Code
     LogEntry.TextSize = 12
     LogEntry.TextColor3 = textColor
@@ -108,6 +118,7 @@ local function WriteLog(text, textColor)
     LogEntry.Text = text
     LogEntry.Parent = LogContainer
 
+    -- Force the scrolling frame to jump to the newest log
     task.spawn(function()
         task.wait()
         if UIListLayout then
