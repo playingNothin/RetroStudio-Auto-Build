@@ -1,7 +1,7 @@
 local Properties = {
-    ["BasePart"] = {
+	["BasePart"] = {
 		"BrickColor", "CanCollide", "Anchored", "Locked", "Velocity", "Transparency", "Reflectance", "Material",
-		"BackSurface", "BottomSurface", "FrontSurface", "LeftSurface", "RightSurface", "TopSurface",  "Name", "CFrame", "Size"
+		"BackSurface", "BottomSurface", "FrontSurface", "LeftSurface", "RightSurface", "TopSurface", "Name", "CFrame", "Size"
 	},
 	["PointLight"] = {
 		"Brightness", "Color", "Range", "Shadows", "Enabled"
@@ -460,7 +460,9 @@ local Properties = {
 		"TextTransparency",
 		"TextWrapped",
 		"TextXAlignment",
-		"TextYAlignment"
+		"TextYAlignment",
+		"Font",
+		"FontSize"
 	},
 	["TextButton"] = {
 		"Active",
@@ -487,7 +489,9 @@ local Properties = {
 		"TextTransparency",
 		"TextWrapped",
 		"TextXAlignment",
-		"TextYAlignment"
+		"TextYAlignment",
+		"Font",
+		"FontSize"
 	},
 	["TextLabel"] = {
 		"Active",
@@ -510,7 +514,9 @@ local Properties = {
 		"TextTransparency",
 		"TextWrapped",
 		"TextXAlignment",
-		"TextYAlignment"
+		"TextYAlignment",
+		"Font",
+		"FontSize"
 	}
 }
 
@@ -521,10 +527,9 @@ Properties.CornerWedgePart = Properties.BasePart
 Properties.Seat = Properties.BasePart
 Properties.TrussPart = Properties.BasePart
 Properties.VehicleSeat = Properties.BasePart
-Properties.SpawnLocation = Properties.BasePart
+
 Properties.CylinderMesh = Properties.Mesh
 Properties.BlockMesh = Properties.Mesh
-
 
 Properties.Vector3Value = Properties.StringValue
 Properties.NumberValue = Properties.StringValue
@@ -536,8 +541,11 @@ Properties.Color3Value = Properties.StringValue
 
 Properties.Hint = Properties.Message
 
-for _,Properties2 in pairs(Properties) do
-	table.insert(Properties2, "Name")
+-- Prevent duplicate "Name" entries on tables that already define it
+for _, PropertiesTable in pairs(Properties) do
+	if not table.find(PropertiesTable, "Name") then
+		table.insert(PropertiesTable, "Name")
+	end
 end
 
 return Properties
